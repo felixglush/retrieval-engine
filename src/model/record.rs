@@ -1,5 +1,6 @@
 use super::{MetadataMap, RecordKey};
 use crate::error::ModelError;
+use time::OffsetDateTime;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Record {
@@ -9,12 +10,13 @@ pub struct Record {
     pub content: String,
     pub embedding: Option<Vec<f32>>,
     pub metadata: MetadataMap,
-    pub created_at: String,
+    pub created_at: OffsetDateTime,
+    pub updated_at: Option<OffsetDateTime>,
     pub importance: Option<f32>,
 }
 
 impl Record {
-    pub fn key(&self) -> RecordKey {
+    pub fn key(&self) -> Result<RecordKey, ModelError> {
         RecordKey::new(
             self.namespace.clone(),
             self.collection.clone(),
@@ -51,17 +53,20 @@ impl Record {
             });
         }
 
-        if self.created_at.trim().is_empty() {
-            return Err(ModelError::EmptyField {
-                type_name: "Record",
-                field: "created_at",
-            });
-        }
-
         if let Some(importance) = self.importance
             && !(0.0..=1.0).contains(&importance)
         {
             return Err(ModelError::ImportanceOutOfRange { importance });
+        }
+
+        if let Some(updated_at) = self.updated_at
+            && updated_at < self.created_at
+        {
+            return Err(ModelError::TimestampOutOfOrder {
+                type_name: "Record",
+                earlier_field: "created_at",
+                later_field: "updated_at",
+            });
         }
 
         if let Some(embedding) = &self.embedding {
@@ -92,6 +97,11 @@ mod tests {
     use super::Record;
     use crate::error::ModelError;
     use crate::model::{MetadataMap, RecordKey};
+    use time::{OffsetDateTime, format_description::well_known::Rfc3339};
+
+    fn parse_timestamp(value: &str) -> OffsetDateTime {
+        OffsetDateTime::parse(value, &Rfc3339).unwrap()
+    }
 
     #[test]
     fn rejects_out_of_range_importance() {
@@ -102,7 +112,8 @@ mod tests {
             content: "Black linen dress".to_string(),
             embedding: None,
             metadata: MetadataMap::new(),
-            created_at: "2026-03-13T10:00:00Z".to_string(),
+            created_at: parse_timestamp("2026-03-13T10:00:00Z"),
+            updated_at: None,
             importance: Some(1.5),
         };
 
@@ -121,17 +132,43 @@ mod tests {
             content: "Black linen dress".to_string(),
             embedding: None,
             metadata: MetadataMap::new(),
-            created_at: "2026-03-14T10:00:00Z".to_string(),
+            created_at: parse_timestamp("2026-03-14T10:00:00Z"),
+            updated_at: Some(parse_timestamp("2026-03-14T11:00:00Z")),
             importance: Some(0.8),
         };
 
         assert_eq!(
             record.key(),
-            RecordKey::new(
+            Ok(RecordKey::new(
                 "workspace_abc".to_string(),
                 "products".to_string(),
                 "prod_123".to_string(),
             )
+            .unwrap())
+        );
+    }
+
+    #[test]
+    fn rejects_updated_at_before_created_at() {
+        let record = Record {
+            id: "prod_123".to_string(),
+            namespace: "workspace_abc".to_string(),
+            collection: "products".to_string(),
+            content: "Black linen dress".to_string(),
+            embedding: None,
+            metadata: MetadataMap::new(),
+            created_at: parse_timestamp("2026-03-14T11:00:00Z"),
+            updated_at: Some(parse_timestamp("2026-03-14T10:00:00Z")),
+            importance: Some(0.8),
+        };
+
+        assert_eq!(
+            record.validate(None),
+            Err(ModelError::TimestampOutOfOrder {
+                type_name: "Record",
+                earlier_field: "created_at",
+                later_field: "updated_at",
+            })
         );
     }
 }

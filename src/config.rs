@@ -1,4 +1,4 @@
-use crate::error::ConfigError;
+pub use crate::error::ConfigError;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EngineConfig {

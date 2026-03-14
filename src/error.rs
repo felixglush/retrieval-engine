@@ -14,13 +14,33 @@ impl fmt::Display for ConfigError {
                 write!(f, "config.default_top_k must be greater than zero")
             }
             Self::InvalidEmbeddingDimension => {
-                write!(f, "config.embedding_dimension must be greater than zero when provided")
+                write!(
+                    f,
+                    "config.embedding_dimension must be greater than zero when provided"
+                )
             }
         }
     }
 }
 
 impl std::error::Error for ConfigError {}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum StorageError {
+    InvalidRecord(ModelError),
+    Backend(String),
+}
+
+impl fmt::Display for StorageError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidRecord(error) => write!(f, "invalid record: {error}"),
+            Self::Backend(message) => write!(f, "storage backend error: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for StorageError {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ModelError {
@@ -47,6 +67,11 @@ pub enum ModelError {
     MissingQueryInput,
     ImportanceOutOfRange {
         importance: f32,
+    },
+    TimestampOutOfOrder {
+        type_name: &'static str,
+        earlier_field: &'static str,
+        later_field: &'static str,
     },
 }
 
@@ -81,8 +106,19 @@ impl fmt::Display for ModelError {
                 write!(f, "query must include query_text, query_embedding, or both")
             }
             Self::ImportanceOutOfRange { importance } => {
-                write!(f, "record.importance must be between 0.0 and 1.0, got {importance}")
+                write!(
+                    f,
+                    "record.importance must be between 0.0 and 1.0, got {importance}"
+                )
             }
+            Self::TimestampOutOfOrder {
+                type_name,
+                earlier_field,
+                later_field,
+            } => write!(
+                f,
+                "{type_name}.{later_field} must be greater than or equal to {type_name}.{earlier_field}"
+            ),
         }
     }
 }
