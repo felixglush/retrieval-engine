@@ -82,7 +82,8 @@ struct Record {
     content: String,
     embedding: Option<Vec<f32>>,
     metadata: MetadataMap,
-    created_at: String,
+    created_at: OffsetDateTime,
+    updated_at: Option<OffsetDateTime>,
     importance: Option<f32>,
 }
 ```

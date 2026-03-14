@@ -62,6 +62,7 @@ Suggested v1 fields:
 - embedding
 - metadata
 - created_at
+- updated_at
 - importance
 
 Why these fields matter:
@@ -73,6 +74,7 @@ Why these fields matter:
 - `embedding` supports semantic search
 - `metadata` supports structured filtering
 - `created_at` supports freshness-aware ranking
+- `updated_at` supports auditability and replacement tracking after upserts
 - `importance` supports manual or application-level weighting
 
 Example:
@@ -92,6 +94,7 @@ Example:
     "tags": ["linen", "summer", "midi"]
   },
   "created_at": "2026-03-12T10:30:00Z",
+  "updated_at": "2026-03-13T08:15:00Z",
   "importance": 0.8
 }
 ```
@@ -513,7 +516,8 @@ struct Record {
     content: String,
     embedding: Option<Vec<f32>>,
     metadata: MetadataMap,
-    created_at: String,
+    created_at: OffsetDateTime,
+    updated_at: Option<OffsetDateTime>,
     importance: Option<f32>,
 }
 ```
@@ -523,6 +527,10 @@ Why this shape fits v1:
 - metadata fields remain flexible by name
 - metadata values stay constrained by type
 - filtering can look up a field by name and then compare against a known set of value kinds
+
+`OffsetDateTime` comes from Rust's `time` crate.
+It is a real timestamp type, which means the compiler knows `created_at` and `updated_at` are times instead of arbitrary text.
+That helps us compare timestamps safely during freshness scoring and storage updates.
 
 One Rust concept here is `HashMap<K, V>`.
 `HashMap` is Rust's key-value map type.
@@ -741,6 +749,7 @@ That means:
 
 - inserting a new `id` creates a new record
 - writing an existing `id` replaces the stored record and requires index updates
+- `updated_at`, when present, should be greater than or equal to `created_at`
 
 This matters because storage and indexing need consistent update semantics from day one.
 
@@ -753,7 +762,6 @@ These questions should be answered before coding too far:
 - Should `Query.collection` stay required in v1 and only become optional when cross-collection retrieval is explicitly designed?
 - Which fields belong in the result view by default versus behind an optional expansion mechanism?
 - Should `importance` be normalized to a strict range such as `0.0..=1.0`?
-- Should `created_at` always be required, or can it be optional with freshness scoring disabled when missing?
 - How much score detail should be public by default? All scores should be public.
 
 ---

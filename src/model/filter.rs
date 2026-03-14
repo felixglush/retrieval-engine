@@ -27,9 +27,9 @@ impl Filter {
 
         let expected = match self.operator {
             FilterOperator::Eq => match &self.value {
-                MetadataValue::String(_)
-                | MetadataValue::Number(_)
-                | MetadataValue::Boolean(_) => return Ok(()),
+                MetadataValue::String(_) | MetadataValue::Number(_) | MetadataValue::Boolean(_) => {
+                    return Ok(());
+                }
                 MetadataValue::StringList(_) => "string, number, or boolean",
             },
             FilterOperator::Lt | FilterOperator::Gt => match &self.value {
